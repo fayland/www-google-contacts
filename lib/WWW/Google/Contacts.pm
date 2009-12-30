@@ -162,13 +162,52 @@ sub get_groups {
 
     $self->login() or croak 'Authentication failed';
     
-    my $url  = 'http://www.google.com/m8/feeds/groups/default/full?alt=json&v=3.0';
+    my $url  = 'http://www.google.com/m8/feeds/groups/default/full?v=3.0';
     my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
     my $content = $resp->content;
-    my $data = $self->{xmls}->XMLin($content, ForceArray => ['entry'], SuppressEmpty => undef);
+    my $data = $self->{xmls}->XMLin($content, SuppressEmpty => undef);
     
-    my @groups = @{ $data->{feed}->{entry} };
+    my @groups;
+    foreach my $id (keys %{ $data->{entry} } ) {
+        my $d = $data->{entry}->{$id};
+        
+    }
+    
     return @groups;
+}
+
+sub create_group {
+    my $self = shift;
+    my $contact = scalar @_ % 2 ? shift : { @_ };
+    
+    $self->login() or croak 'Authentication failed';
+
+    my $data = {
+        'atom:entry' => {
+            'xmlns:gd'   => 'http://schemas.google.com/g/2005',
+            'atom:category' => {
+                'scheme' => 'http://schemas.google.com/g/2005#kind',
+                'term'   => 'http://schemas.google.com/contact/2008#group'
+            },
+            'atom:title' => {
+                type => 'text',
+                content => $contact->{title},
+            },
+            'gd:extendedProperty' => {
+                name => 'more info about the group',
+                info => [ 'Nice people.' ],
+            }
+        },
+    };
+    my $xml = $self->{xmls}->XMLout($data, KeepRoot => 1);
+    
+    my %headers = $self->{authsub}->auth_params;
+    $headers{'Content-Type'} = 'application/atom+xml';
+    my $url = 'http://www.google.com/m8/feeds/groups/default/full';
+    my $resp =$self->{ua}->post( $url, %headers, Content => $xml );
+    print $xml . "\n";
+    print $resp->content . "\n";
+    return ($resp->code == 201) ? 1 : 0;
 }
 
 1;
@@ -246,8 +285,12 @@ C<start-index>, C<max_results> etc refer L<http://code.google.com/apis/contacts/
 
 =item * delete_contact($id)
 
-    my $status= $gcontoct->delete_contact('http://www.google.com/m8/feeds/contacts/account%40gmail.com/base/1');
+    my $status = $gcontacts->delete_contact('http://www.google.com/m8/feeds/contacts/account%40gmail.com/base/1');
 
 The B<id> is from C<get_contacts>.
+
+=item * create_group
+
+    my $status = $gcontacts->create_group( { title => 'Test Group' } );
 
 =back
