@@ -9,6 +9,7 @@ use URI::Escape;
 use LWP::UserAgent;
 use Net::Google::AuthSub;
 use XML::Simple ();
+use HTTP::Request;
 
 sub new {
     my $class = shift;
@@ -45,64 +46,11 @@ sub login {
     return 1;
 }
 
-sub get_contacts {
-    my ($self, $group, $args) = @_;
-
-    $self->login() or croak 'Authentication failed';
-    
-    $group ||= 'full';
-    my $url = sprintf( 'http://www.google.com/m8/feeds/contacts/default/%s?max-results=9999&v=3.0', uri_escape($group) );
-    foreach my $key (%$args) {
-        $url .= '&' . uri_escape($key) . '=' . uri_escape($args->{$key});
-    }
-    my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
-    my $content = $resp->content;
-    my $data = $self->{xmls}->XMLin($content, ForceArray => ['entry'], SuppressEmpty => undef);
-    
-    my @contacts;
-    foreach my $id (keys %{ $data->{entry} } ) {
-        my $d = $data->{entry}->{$id};
-        my $name = $d->{'gd:name'}->{'gd:fullName'};
-        my $updated = $d->{updated};
-        my $groupMembershipInfo = $d->{'gContact:groupMembershipInfo'}->{'href'};
-
-        my @emails;
-        my $emails = $d->{'gd:email'};
-        if ($emails) {
-            @emails = ( ref($emails) eq 'ARRAY' ) ? @{$emails} : ($emails);
-            @emails = map { $_->{address} } @emails;
-        }
-
-        push @contacts, {
-            id => $id,
-            name => $name,
-            updated => $updated,
-            emails  => \@emails,
-            groupMembershipInfo => $groupMembershipInfo,
-        };
-    }
-    
-    return @contacts;
-}
-
-sub get_groups {
-    my ($self) = @_;
-
-    $self->login() or croak 'Authentication failed';
-    
-    my $url  = 'http://www.google.com/m8/feeds/groups/default/full?alt=json&v=3.0';
-    my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
-    my $content = $resp->content;
-    my $data = $self->{xmls}->XMLin($content, ForceArray => ['entry'], SuppressEmpty => undef);
-    
-    my @groups = @{ $data->{feed}->{entry} };
-    return @groups;
-}
-
 sub create_contact {
     my $self = shift;
-    
     my $contact = scalar @_ % 2 ? shift : { @_ };
+    
+    $self->login() or croak 'Authentication failed';
     
     my $data = {
         'atom:entry' => {
@@ -145,6 +93,84 @@ sub create_contact {
     return ($resp->code == 201) ? 1 : 0;
 }
 
+sub get_contacts {
+    my $self = shift;
+    my $args = scalar @_ % 2 ? shift : { @_ };
+
+    $self->login() or croak 'Authentication failed';
+    
+    $args->{'alt'} = 'atom'; # must be atom
+    $args->{'max-results'} ||= 9999;
+    my $group = delete $args->{group} || 'full';
+    my $url = sprintf( 'http://www.google.com/m8/feeds/contacts/default/%s?v=3.0', uri_escape($group) );
+    foreach my $key (%$args) {
+        print "- $key - \n";
+        $url .= '&' . uri_escape($key) . '=' . uri_escape($args->{$key});
+    }
+    my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
+    my $content = $resp->content;
+    my $data = $self->{xmls}->XMLin($content, ForceArray => ['entry'], SuppressEmpty => undef);
+    
+    my @contacts;
+    foreach my $id (keys %{ $data->{entry} } ) {
+        my $d = $data->{entry}->{$id};
+        my $name = $d->{'gd:name'}->{'gd:fullName'};
+        my $updated = $d->{updated};
+        my $groupMembershipInfo = $d->{'gContact:groupMembershipInfo'}->{'href'};
+
+        my @emails;
+        my $emails = $d->{'gd:email'};
+        if ($emails) {
+            @emails = ( ref($emails) eq 'ARRAY' ) ? @{$emails} : ($emails);
+            @emails = map { $_->{address} } @emails;
+        }
+
+        push @contacts, {
+            id => $id,
+            name => $name,
+            updated => $updated,
+            emails  => \@emails,
+            groupMembershipInfo => $groupMembershipInfo,
+        };
+    }
+    
+    return @contacts;
+}
+
+sub update_contact {
+    my ($self, $id, $contact) = @_;
+    
+    $self->login() or croak 'Authentication failed';
+    
+    
+}
+
+sub delete_contact {
+    my ($self, $id) = @_;
+    
+    $self->login() or croak 'Authentication failed';
+    
+    my %headers = $self->{authsub}->auth_params;
+    $headers{'If-Match'} = '*';
+    $headers{'X-HTTP-Method-Override'} = 'DELETE';
+    my $resp =$self->{ua}->post($id, %headers);
+    return $resp->code == 200 ? 1 : 0;
+}
+
+sub get_groups {
+    my ($self) = @_;
+
+    $self->login() or croak 'Authentication failed';
+    
+    my $url  = 'http://www.google.com/m8/feeds/groups/default/full?alt=json&v=3.0';
+    my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
+    my $content = $resp->content;
+    my $data = $self->{xmls}->XMLin($content, ForceArray => ['entry'], SuppressEmpty => undef);
+    
+    my @groups = @{ $data->{feed}->{entry} };
+    return @groups;
+}
+
 1;
 __END__
 
@@ -167,5 +193,61 @@ __END__
     } );
     print "Create OK" if $status;
     
+    my @contacts = $gcontacts->get_contacts;
+    foreach my $contact (@contacts) {
+        print "$contact->{name}: " . join(', ', @{ $contact->{emails} }) . "\n";
+        $gcontacts->delete_contact($contact->{id}) if $contact->{name} eq 'Test';
+    }
 
 =head1 DESCRIPTION
+
+This module implements 'Google Contacts Data API' according L<http://code.google.com/apis/contacts/docs/3.0/developers_guide_protocol.html>
+
+=head2 METHODS
+
+=over 4
+
+=item * new/login
+
+    my $gcontacts = WWW::Google::Contacts->new();
+    $gcontacts->login('fayland@gmail.com', 'pass') or die 'login failed';
+
+=item * create_contact
+
+    $gcontacts->create_contact( {
+        givenName => 'FayTestG',
+        familyName => 'FayTestF',
+        fullName   => 'Fayland Lam',
+        Notes     => 'just a note',
+        primaryMail => 'primary@example.com',
+        displayName => 'FayTest Dis',
+        secondaryMail => 'secndary@test.com',
+    } );
+
+return 1 if created
+
+=item * get_contacts
+
+    my @contacts = $gcontacts->get_contacts;
+    my @contacts = $gcontacts->get_contacts( {
+        group => 'thin', # default to 'full'
+    } )
+    my @contacts = $gcontacts->get_contacts( {
+        updated-min => '2007-03-16T00:00:00',
+        start-index => 10,
+        max-results => 99, # default as 9999
+    } );
+
+get contacts from this account.
+
+C<group> refers L<http://code.google.com/apis/contacts/docs/2.0/reference.html#Projections>
+
+C<start-index>, C<max_results> etc refer L<http://code.google.com/apis/contacts/docs/2.0/reference.html#Parameters>
+
+=item * delete_contact($id)
+
+    my $status= $gcontoct->delete_contact('http://www.google.com/m8/feeds/contacts/account%40gmail.com/base/1');
+
+The B<id> is from C<get_contacts>.
+
+=back
