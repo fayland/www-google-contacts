@@ -104,7 +104,6 @@ sub get_contacts {
     my $group = delete $args->{group} || 'full';
     my $url = sprintf( 'http://www.google.com/m8/feeds/contacts/default/%s?v=3.0', uri_escape($group) );
     foreach my $key (%$args) {
-        print "- $key - \n";
         $url .= '&' . uri_escape($key) . '=' . uri_escape($args->{$key});
     }
     my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
@@ -148,21 +147,21 @@ sub update_contact {
 sub delete_contact {
     my ($self, $id) = @_;
     
-    $self->login() or croak 'Authentication failed';
-    
-    my %headers = $self->{authsub}->auth_params;
-    $headers{'If-Match'} = '*';
-    $headers{'X-HTTP-Method-Override'} = 'DELETE';
-    my $resp =$self->{ua}->post($id, %headers);
-    return $resp->code == 200 ? 1 : 0;
+    $self->_delete($id);
 }
 
 sub get_groups {
-    my ($self) = @_;
+    my $self = shift;
+    my $args = scalar @_ % 2 ? shift : { @_ };
 
     $self->login() or croak 'Authentication failed';
     
+    $args->{'alt'} = 'atom'; # must be atom
+    $args->{'max-results'} ||= 9999;
     my $url  = 'http://www.google.com/m8/feeds/groups/default/full?v=3.0';
+    foreach my $key (%$args) {
+        $url .= '&' . uri_escape($key) . '=' . uri_escape($args->{$key});
+    }
     my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
     my $content = $resp->content;
     my $data = $self->{xmls}->XMLin($content, SuppressEmpty => undef);
@@ -208,6 +207,24 @@ sub create_group {
     print $xml . "\n";
     print $resp->content . "\n";
     return ($resp->code == 201) ? 1 : 0;
+}
+
+sub delete_group {
+    my ($self, $id) = @_;
+    
+    $self->_delete($id);
+}
+
+sub _delete {
+    my ($self, $id) = @_;
+    
+    $self->login() or croak 'Authentication failed';
+    
+    my %headers = $self->{authsub}->auth_params;
+    $headers{'If-Match'} = '*';
+    $headers{'X-HTTP-Method-Override'} = 'DELETE';
+    my $resp =$self->{ua}->post($id, %headers);
+    return $resp->code == 200 ? 1 : 0;
 }
 
 1;
@@ -292,5 +309,9 @@ The B<id> is from C<get_contacts>.
 =item * create_group
 
     my $status = $gcontacts->create_group( { title => 'Test Group' } );
+
+=item * delete_group
+
+    my $status = $gcontacts->delete_contact('http://www.google.com/m8/feeds/groups/account%40gmail.com/full/2');
 
 =back
