@@ -335,3 +335,7 @@ Get all groups.
     my $status = $gcontacts->delete_contact('http://www.google.com/m8/feeds/groups/account%40gmail.com/full/2');
 
 =back
+
+=head2 ACKNOWLEDGE
+
+John Clyde - who share me with his code about Contacts API
