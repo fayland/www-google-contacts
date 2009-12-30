@@ -103,7 +103,7 @@ sub get_contacts {
     $args->{'max-results'} ||= 9999;
     my $group = delete $args->{group} || 'full';
     my $url = sprintf( 'http://www.google.com/m8/feeds/contacts/default/%s?v=3.0', uri_escape($group) );
-    foreach my $key (%$args) {
+    foreach my $key (keys %$args) {
         $url .= '&' . uri_escape($key) . '=' . uri_escape($args->{$key});
     }
     my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
@@ -159,7 +159,7 @@ sub get_groups {
     $args->{'alt'} = 'atom'; # must be atom
     $args->{'max-results'} ||= 9999;
     my $url  = 'http://www.google.com/m8/feeds/groups/default/full?v=3.0';
-    foreach my $key (%$args) {
+    foreach my $key (keys %$args) {
         $url .= '&' . uri_escape($key) . '=' . uri_escape($args->{$key});
     }
     my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
@@ -169,7 +169,12 @@ sub get_groups {
     my @groups;
     foreach my $id (keys %{ $data->{entry} } ) {
         my $d = $data->{entry}->{$id};
-        
+        push @groups, {
+            id => $id,
+            title   => $d->{title},
+            updated => $d->{updated},
+            exists $d->{'gContact:systemGroup'} ? ('gContact:systemGroup' => $d->{'gContact:systemGroup'}->{'id'}) : (),
+        };
     }
     
     return @groups;
@@ -300,6 +305,10 @@ C<group> refers L<http://code.google.com/apis/contacts/docs/2.0/reference.html#P
 
 C<start-index>, C<max_results> etc refer L<http://code.google.com/apis/contacts/docs/2.0/reference.html#Parameters>
 
+=item * update_contact
+
+TODO
+
 =item * delete_contact($id)
 
     my $status = $gcontacts->delete_contact('http://www.google.com/m8/feeds/contacts/account%40gmail.com/base/1');
@@ -309,6 +318,17 @@ The B<id> is from C<get_contacts>.
 =item * create_group
 
     my $status = $gcontacts->create_group( { title => 'Test Group' } );
+
+=item * get_groups
+
+    my @groups = $gcontacts->get_groups;
+    my @groups = $gcontacts->get_groups( {
+        updated-min => '2007-03-16T00:00:00',
+        start-index => 10,
+        max-results => 99, # default as 9999
+    } );
+
+Get all groups.
 
 =item * delete_group
 
