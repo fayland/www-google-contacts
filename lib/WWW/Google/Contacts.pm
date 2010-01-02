@@ -21,6 +21,8 @@ sub new {
     }
     $args->{authsub} ||= Net::Google::AuthSub->new(service => 'cp');
     $args->{xmls} ||= XML::Simple->new();
+    $args->{debug} ||= 0;
+    $args->{'GData-Version'} = 3.0;
     
     bless $args, $class;
 }
@@ -85,11 +87,14 @@ sub create_contact {
         },
     };
     my $xml = $self->{xmls}->XMLout($data, KeepRoot => 1);
+    print STDERR $xml . "\n" if $self->{debug};
     
     my %headers = $self->{authsub}->auth_params;
     $headers{'Content-Type'} = 'application/atom+xml';
+    $headers{'GData-Version'} = $self->{'GData-Version'};
     my $url = 'http://www.google.com/m8/feeds/contacts/default/full';
     my $resp =$self->{ua}->post( $url, %headers, Content => $xml );
+    print STDERR $resp->content . "\n" if $self->{debug};
     return ($resp->code == 201) ? 1 : 0;
 }
 
@@ -108,6 +113,7 @@ sub get_contacts {
     }
     my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
     my $content = $resp->content;
+    print STDERR $content . "\n" if $self->{debug};
     my $data = $self->{xmls}->XMLin($content, ForceArray => ['entry'], SuppressEmpty => undef);
     
     my @contacts;
@@ -204,13 +210,14 @@ sub create_group {
         },
     };
     my $xml = $self->{xmls}->XMLout($data, KeepRoot => 1);
+    print $xml . "\n" if $self->{debug};
     
     my %headers = $self->{authsub}->auth_params;
     $headers{'Content-Type'} = 'application/atom+xml';
+    $headers{'GData-Version'} = $self->{'GData-Version'};
     my $url = 'http://www.google.com/m8/feeds/groups/default/full';
     my $resp =$self->{ua}->post( $url, %headers, Content => $xml );
-    print $xml . "\n";
-    print $resp->content . "\n";
+    print $resp->content . "\n" if $self->{debug};
     return ($resp->code == 201) ? 1 : 0;
 }
 
@@ -228,6 +235,7 @@ sub _delete {
     my %headers = $self->{authsub}->auth_params;
     $headers{'If-Match'} = '*';
     $headers{'X-HTTP-Method-Override'} = 'DELETE';
+    $headers{'GData-Version'} = $self->{'GData-Version'};
     my $resp =$self->{ua}->post($id, %headers);
     return $resp->code == 200 ? 1 : 0;
 }
