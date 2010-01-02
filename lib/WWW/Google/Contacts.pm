@@ -170,6 +170,7 @@ sub get_groups {
     }
     my $resp =$self->{ua}->get( $url, $self->{authsub}->auth_params );
     my $content = $resp->content;
+    print $content . "\n" if $self->{debug};
     my $data = $self->{xmls}->XMLin($content, SuppressEmpty => undef);
     
     my @groups;
@@ -194,6 +195,7 @@ sub create_group {
 
     my $data = {
         'atom:entry' => {
+            'xmlns:atom' => 'http://www.w3.org/2005/Atom',
             'xmlns:gd'   => 'http://schemas.google.com/g/2005',
             'atom:category' => {
                 'scheme' => 'http://schemas.google.com/g/2005#kind',
@@ -202,10 +204,6 @@ sub create_group {
             'atom:title' => {
                 type => 'text',
                 content => $contact->{title},
-            },
-            'gd:extendedProperty' => {
-                name => 'more info about the group',
-                info => [ 'Nice people.' ],
             }
         },
     };
@@ -215,7 +213,7 @@ sub create_group {
     my %headers = $self->{authsub}->auth_params;
     $headers{'Content-Type'} = 'application/atom+xml';
     $headers{'GData-Version'} = $self->{'GData-Version'};
-    my $url = 'http://www.google.com/m8/feeds/groups/default/full';
+    my $url = 'http://www.google.com/m8/feeds/groups/faylandblog%40gmail.com/full';
     my $resp =$self->{ua}->post( $url, %headers, Content => $xml );
     print $resp->content . "\n" if $self->{debug};
     return ($resp->code == 201) ? 1 : 0;
@@ -325,6 +323,7 @@ The B<id> is from C<get_contacts>.
 
 =item * create_group
 
+    my $status = $gcontacts->create_group( { title => 'Test Group' } );
     my $status = $gcontacts->create_group( { title => 'Test Group' } );
 
 =item * get_groups

@@ -1,5 +1,8 @@
 Revision history for WWW-Google-Contacts
 
+0.01    2010.1.2
+        fix create_group error
+
 0.01_02 2010.1.2
         fix GData-Version header
 
