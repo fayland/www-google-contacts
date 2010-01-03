@@ -142,12 +142,79 @@ sub get_contacts {
     return @contacts;
 }
 
+sub get_contact {
+    my ($self, $id) = @_;
+    
+    $self->login() or croak 'Authentication failed';
+    
+    my %headers = $self->{authsub}->auth_params;
+    $headers{'GData-Version'} = $self->{'GData-Version'};
+    my $resp =$self->{ua}->get( $id, %headers );
+    print $resp->content . "\n" if $self->{debug};
+    my $data = $self->{xmls}->XMLin($resp->content, SuppressEmpty => undef);
+    return $data;
+}
+
 sub update_contact {
     my ($self, $id, $contact) = @_;
     
     $self->login() or croak 'Authentication failed';
+
+    my $data = {
+        'atom:entry' => {
+            'xmlns:atom' => 'http://www.w3.org/2005/Atom',
+            'xmlns:gd'   => 'http://schemas.google.com/g/2005',
+            'atom:category' => {
+                'scheme' => 'http://schemas.google.com/g/2005#kind',
+                'term'   => 'http://schemas.google.com/contact/2008#contact'
+            },
+            id => [ $id ],
+            'gd:name' => {
+                'gd:givenName'  => [ $contact->{givenName} ],
+                'gd:familyName' => [ $contact->{familyName} ],
+                'gd:fullName'   => [ $contact->{fullName} ],
+            },
+            'atom:content' => {
+                type => 'text',
+                content => $contact->{Notes},
+            },
+            'gd:email' => [
+                {
+                    rel => 'http://schemas.google.com/g/2005#work',
+                    primary => 'true',
+                    address => $contact->{primaryMail},
+                    displayName => $contact->{displayName},
+                },
+                {
+                    rel => 'http://schemas.google.com/g/2005#home',
+                    address => $contact->{secondaryMail},
+                }
+            ],
+            'link' => [
+                {
+                    rel  => 'self',
+                    type => 'application/atom+xml',
+                    href => $id,
+                },
+                {
+                    rel  => 'edit',
+                    type => 'application/atom+xml',
+                    href => $id,
+                },
+            ],
+        },
+    };
+    my $xml = $self->{xmls}->XMLout($data, KeepRoot => 1);
+    print $xml . "\n" if $self->{debug};
     
-    
+    my %headers = $self->{authsub}->auth_params;
+    $headers{'Content-Type'} = 'application/atom+xml';
+    $headers{'GData-Version'} = $self->{'GData-Version'};
+    $headers{'If-Match'} = '*';
+    $headers{'X-HTTP-Method-Override'} = 'PUT';
+    my $resp =$self->{ua}->post( $id, %headers, Content => $xml );
+    print $resp->content . "\n" if $self->{debug};
+    return ($resp->code == 200) ? 1 : 0;
 }
 
 sub delete_contact {
@@ -187,6 +254,19 @@ sub get_groups {
     return @groups;
 }
 
+sub get_group {
+    my ($self, $id) = @_;
+    
+    $self->login() or croak 'Authentication failed';
+    
+    my %headers = $self->{authsub}->auth_params;
+    $headers{'GData-Version'} = $self->{'GData-Version'};
+    my $resp =$self->{ua}->get( $id, %headers );
+    print $resp->content . "\n" if $self->{debug};
+    my $data = $self->{xmls}->XMLin($resp->content, SuppressEmpty => undef);
+    return $data;
+}
+
 sub create_group {
     my $self = shift;
     my $contact = scalar @_ % 2 ? shift : { @_ };
@@ -217,6 +297,51 @@ sub create_group {
     my $resp =$self->{ua}->post( $url, %headers, Content => $xml );
     print $resp->content . "\n" if $self->{debug};
     return ($resp->code == 201) ? 1 : 0;
+}
+
+sub update_group {
+    my ($self, $id, $args) = @_;
+    
+    $self->login() or croak 'Authentication failed';
+
+    my $data = {
+        'atom:entry' => {
+            'xmlns:atom' => 'http://www.w3.org/2005/Atom',
+            'xmlns:gd'   => 'http://schemas.google.com/g/2005',
+            'atom:category' => {
+                'scheme' => 'http://schemas.google.com/g/2005#kind',
+                'term'   => 'http://schemas.google.com/contact/2008#group'
+            },
+            id => [ $id ],
+            'atom:title' => {
+                type => 'text',
+                content => $args->{title},
+            },
+            'link' => [
+                {
+                    rel  => 'self',
+                    type => 'application/atom+xml',
+                    href => $id,
+                },
+                {
+                    rel  => 'edit',
+                    type => 'application/atom+xml',
+                    href => $id,
+                },
+            ],
+        },
+    };
+    my $xml = $self->{xmls}->XMLout($data, KeepRoot => 1);
+    print $xml . "\n" if $self->{debug};
+    
+    my %headers = $self->{authsub}->auth_params;
+    $headers{'Content-Type'} = 'application/atom+xml';
+    $headers{'GData-Version'} = $self->{'GData-Version'};
+    $headers{'If-Match'} = '*';
+    $headers{'X-HTTP-Method-Override'} = 'PUT';
+    my $resp =$self->{ua}->post( $id, %headers, Content => $xml );
+    print $resp->content . "\n" if $self->{debug};
+    return ($resp->code == 200) ? 1 : 0;
 }
 
 sub delete_group {
@@ -311,9 +436,25 @@ C<group> refers L<http://code.google.com/apis/contacts/docs/2.0/reference.html#P
 
 C<start-index>, C<max_results> etc refer L<http://code.google.com/apis/contacts/docs/2.0/reference.html#Parameters>
 
+=item * get_contact($id)
+
+    my $contact = $gcontacts->get_contact('http://www.google.com/m8/feeds/contacts/account%40gmail.com/base/1');
+
+get a contact by B<id>
+
 =item * update_contact
 
-TODO
+    my $status = $gcontacts->update_contact('http://www.google.com/m8/feeds/contacts/account%40gmail.com/base/123623e48cb4e70a', {
+        givenName => 'FayTestG2',
+        familyName => 'FayTestF2',
+        fullName   => 'Fayland Lam2',
+        Notes     => 'just a note2',
+        primaryMail => 'primary@example2.com',
+        displayName => 'FayTest2 Dis',
+        secondaryMail => 'secndary@test62.com',
+    } );
+
+update a contact
 
 =item * delete_contact($id)
 
@@ -337,9 +478,21 @@ The B<id> is from C<get_contacts>.
 
 Get all groups.
 
+=item * get_group($id)
+
+    my $group = $gcontacts->get_group('http://www.google.com/m8/feeds/groups/account%40gmail.com/base/6e744e7d0a4b398c');
+
+get a group by B<id>
+
+=item * update_group($id, { title => $title })
+
+    my $status = $gcontacts->update_group( 'http://www.google.com/m8/feeds/groups/account%40gmail.com/base/6e744e7d0a4b398c', { title => 'New Test Group 66' } );
+
+Update a group
+
 =item * delete_group
 
-    my $status = $gcontacts->delete_contact('http://www.google.com/m8/feeds/groups/account%40gmail.com/full/2');
+    my $status = $gcontacts->delete_contact('http://www.google.com/m8/feeds/groups/account%40gmail.com/base/6e744e7d0a4b398c');
 
 =back
 
