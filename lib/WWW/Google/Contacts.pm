@@ -213,7 +213,7 @@ sub create_group {
     my %headers = $self->{authsub}->auth_params;
     $headers{'Content-Type'} = 'application/atom+xml';
     $headers{'GData-Version'} = $self->{'GData-Version'};
-    my $url = 'http://www.google.com/m8/feeds/groups/faylandblog%40gmail.com/full';
+    my $url = 'http://www.google.com/m8/feeds/groups/default/full';
     my $resp =$self->{ua}->post( $url, %headers, Content => $xml );
     print $resp->content . "\n" if $self->{debug};
     return ($resp->code == 201) ? 1 : 0;
