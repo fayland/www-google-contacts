@@ -465,7 +465,8 @@ The B<id> is from C<get_contacts>.
 =item * create_group
 
     my $status = $gcontacts->create_group( { title => 'Test Group' } );
-    my $status = $gcontacts->create_group( { title => 'Test Group' } );
+
+Create a new group
 
 =item * get_groups
 
