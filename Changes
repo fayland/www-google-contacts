@@ -1,5 +1,9 @@
 Revision history for WWW-Google-Contacts
 
+0.04    2010.2.19
+        *** API Change ***
+        fix get_contacts error (RT 54781)
+
 0.03    2010.1.4
         update_contact, update_group
 
