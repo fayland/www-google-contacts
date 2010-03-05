@@ -1,5 +1,8 @@
 Revision history for WWW-Google-Contacts
 
+0.05    2010.3.5
+        make create|update_contact secondaryMail as optional (reported by Logan Hansen)
+
 0.04    2010.2.19
         *** API Change ***
         fix get_contacts error (RT 54781)
